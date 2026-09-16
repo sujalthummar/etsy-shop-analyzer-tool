@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 type Shop = {
   id: string;
@@ -85,6 +85,130 @@ function ChangesTable({ changes }: { changes: Change[] }) {
   );
 }
 
+type ProductGroupData = {
+  listingId: number;
+  title: string;
+  url: string | null;
+  rows: Change[];
+};
+
+/** One group per listing_id. Each group's own rows are oldest-first, so the
+ *  before→after chain reads top-to-bottom the way it actually happened.
+ *  Groups themselves are ordered by whichever product changed most recently. */
+function groupByProduct(rows: Change[]): ProductGroupData[] {
+  const map = new Map<number, Change[]>();
+  for (const c of rows) {
+    if (!map.has(c.listing_id)) map.set(c.listing_id, []);
+    map.get(c.listing_id)!.push(c);
+  }
+  const groups = Array.from(map.entries()).map(([listingId, changeRows]) => {
+    const sorted = [...changeRows].sort(
+      (a, b) =>
+        new Date(a.detected_at).getTime() - new Date(b.detected_at).getTime(),
+    );
+    const latest = sorted[sorted.length - 1];
+    return {
+      listingId,
+      title: latest.listing_title,
+      url: latest.listing_url,
+      rows: sorted,
+    };
+  });
+  groups.sort(
+    (a, b) =>
+      new Date(b.rows[b.rows.length - 1].detected_at).getTime() -
+      new Date(a.rows[a.rows.length - 1].detected_at).getTime(),
+  );
+  return groups;
+}
+
+function ProductGroup({ group }: { group: ProductGroupData }) {
+  const [expanded, setExpanded] = useState(true);
+  return (
+    <div className="border-b border-line/60 last:border-b-0">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between px-5 py-2.5 text-left"
+      >
+        <span className="text-sm font-medium text-ink">
+          {group.url ? (
+            <a
+              href={group.url}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-accent hover:underline"
+            >
+              {truncate(group.title, 60)}
+            </a>
+          ) : (
+            truncate(group.title, 60)
+          )}
+          <span className="ml-2 rounded-full bg-paper px-2 py-0.5 text-xs text-muted">
+            {group.rows.length} change{group.rows.length > 1 ? "s" : ""}
+          </span>
+        </span>
+        <span className="text-xs text-muted">
+          {expanded ? "▾ hide" : "▸ show"}
+        </span>
+      </button>
+      {expanded && (
+        <div className="overflow-x-auto px-5 pb-3">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-line text-xs uppercase tracking-wide text-muted">
+                <th className="py-2 pr-4 font-medium">Detected</th>
+                <th className="py-2 pr-4 font-medium">Field</th>
+                <th className="py-2 pr-4 font-medium">Before</th>
+                <th className="py-2 font-medium">After</th>
+              </tr>
+            </thead>
+            <tbody>
+              {group.rows.map((c) => (
+                <tr
+                  key={c.id}
+                  className="border-b border-line/40 align-top last:border-b-0"
+                >
+                  <td className="whitespace-nowrap py-2 pr-4 text-muted">
+                    {new Date(c.detected_at).toLocaleString()}
+                  </td>
+                  <td className="py-2 pr-4">
+                    <span className="rounded-full bg-paper px-2 py-0.5 text-xs">
+                      {FIELD_LABEL[c.field] ?? c.field}
+                    </span>
+                  </td>
+                  <td className="max-w-xs py-2 pr-4 text-muted">
+                    {truncate(c.old_value)}
+                  </td>
+                  <td className="max-w-xs py-2">{truncate(c.new_value)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChangesView({
+  changes,
+  viewMode,
+}: {
+  changes: Change[];
+  viewMode: "time" | "product";
+}) {
+  if (viewMode === "time") return <ChangesTable changes={changes} />;
+  const groups = groupByProduct(changes);
+  return (
+    <div>
+      {groups.map((g) => (
+        <ProductGroup key={g.listingId} group={g} />
+      ))}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [shops, setShops] = useState<Shop[]>([]);
   const [changes, setChanges] = useState<Change[]>([]);
@@ -94,6 +218,7 @@ export default function Dashboard() {
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [loadingChanges, setLoadingChanges] = useState(false);
+  const [viewMode, setViewMode] = useState<"product" | "time">("product");
 
   const loadShops = useCallback(async () => {
     const res = await fetch("/api/shops");
@@ -267,13 +392,31 @@ export default function Dashboard() {
         <section className="rounded-xl border border-line bg-white">
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <h2 className="text-sm font-semibold text-ink">Detected changes</h2>
-            <button
-              onClick={() => exportCsv(selectedShop)}
-              disabled={changes.length === 0}
-              className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink disabled:opacity-40"
-            >
-              Export CSV {selectedShop === "all" ? "(all shops)" : ""}
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="flex rounded-lg border border-line p-0.5 text-xs">
+                <button
+                  onClick={() => setViewMode("product")}
+                  className={`rounded-md px-2.5 py-1 ${
+                    viewMode === "product" ? "bg-ink text-white" : "text-muted"
+                  }`}
+                >
+                  By product
+                </button>
+                <button
+                  onClick={() => setViewMode("time")}
+                  className={`rounded-md px-2.5 py-1 ${viewMode === "time" ? "bg-ink text-white" : "text-muted"}`}
+                >
+                  By time
+                </button>
+              </div>
+              <button
+                onClick={() => exportCsv(selectedShop)}
+                disabled={changes.length === 0}
+                className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink disabled:opacity-40"
+              >
+                Export CSV {selectedShop === "all" ? "(all shops)" : ""}
+              </button>
+            </div>
           </div>
 
           {loadingChanges ? (
@@ -285,7 +428,7 @@ export default function Dashboard() {
               starting from the second sync.
             </p>
           ) : selectedShop !== "all" ? (
-            <ChangesTable changes={changes} />
+            <ChangesView changes={changes} viewMode={viewMode} />
           ) : (
             groupedByShop.map((group, i) => (
               <div
@@ -303,7 +446,7 @@ export default function Dashboard() {
                     Export CSV
                   </button>
                 </div>
-                <ChangesTable changes={group.rows} />
+                <ChangesView changes={group.rows} viewMode={viewMode} />
               </div>
             ))
           )}
