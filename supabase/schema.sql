@@ -9,6 +9,23 @@ create table if not exists shops (
   created_at timestamptz not null default now()
 );
 
+-- Auto-sync schedule: a shop can have any number of these, each with its
+-- own time of day AND its own timezone (e.g. 9am India time + 6pm UK time
+-- for the same shop). last_synced_date is the local calendar date (in that
+-- schedule's own timezone) it last fired, so it only runs once per local day.
+create table if not exists sync_schedules (
+  id uuid primary key default gen_random_uuid(),
+  shop_id uuid not null references shops(id) on delete cascade,
+  timezone text not null,
+  hour smallint not null,
+  minute smallint not null,
+  enabled boolean not null default true,
+  last_synced_date date,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists sync_schedules_shop_lookup on sync_schedules (shop_id);
+
 -- One row per listing per sync run. This is the history table --
 -- diffs are computed by comparing the two most recent rows for a listing_id.
 -- run_id groups every listing snapshotted in the same sync call together,
@@ -56,3 +73,4 @@ create index if not exists listing_changes_lookup
 alter table shops enable row level security;
 alter table listing_snapshots enable row level security;
 alter table listing_changes enable row level security;
+alter table sync_schedules enable row level security;

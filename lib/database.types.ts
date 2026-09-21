@@ -11,6 +11,30 @@ export type Database = {
         Update: Partial<{ id: string; etsy_shop_id: number; shop_name: string; created_at: string }>;
         Relationships: [];
       };
+      sync_schedules: {
+        Row: {
+          id: string;
+          shop_id: string;
+          timezone: string;
+          hour: number;
+          minute: number;
+          enabled: boolean;
+          last_synced_date: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          shop_id: string;
+          timezone: string;
+          hour: number;
+          minute: number;
+          enabled?: boolean;
+          last_synced_date?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["sync_schedules"]["Insert"]>;
+        Relationships: [];
+      };
       listing_snapshots: {
         Row: {
           id: string;
