@@ -95,32 +95,37 @@ export async function GET(req: NextRequest) {
     return hour * 60 + minute >= s.hour * 60 + s.minute;
   });
 
-  const results = [];
-  for (const s of due) {
-    const shop = shopById.get(s.shop_id)!;
-    const { dateStr } = getLocalTimeParts(s.timezone);
-    try {
-      const result = await syncShop(
-        shop.id as string,
-        shop.etsy_shop_id as number,
-      );
-      await supabase
-        .from("sync_schedules")
-        .update({ last_synced_date: dateStr })
-        .eq("id", s.id);
-      results.push({
-        shop: shop.shop_name,
-        scheduledFor: `${s.hour}:${String(s.minute).padStart(2, "0")} ${s.timezone}`,
-        ...result,
-      });
-    } catch (err: any) {
-      results.push({ shop: shop.shop_name, error: err.message });
-    }
-  }
+  // Process all syncs in parallel instead of sequential for better performance
+  const results = await Promise.allSettled(
+    due.map(async (s) => {
+      const shop = shopById.get(s.shop_id)!;
+      const { dateStr } = getLocalTimeParts(s.timezone);
+      try {
+        const result = await syncShop(
+          shop.id as string,
+          shop.etsy_shop_id as number,
+        );
+        await supabase
+          .from("sync_schedules")
+          .update({ last_synced_date: dateStr })
+          .eq("id", s.id);
+        return {
+          shop: shop.shop_name,
+          scheduledFor: `${s.hour}:${String(s.minute).padStart(2, "0")} ${s.timezone}`,
+          ...result,
+        };
+      } catch (err: any) {
+        return { shop: shop.shop_name, error: err.message };
+      }
+    }),
+  );
 
   return NextResponse.json({
     checked: schedules?.length ?? 0,
-    synced: results.length,
-    results,
+    synced: results.filter((r) => r.status === "fulfilled").length,
+    failed: results.filter((r) => r.status === "rejected").length,
+    results: results.map((r) =>
+      r.status === "fulfilled" ? r.value : { error: "Failed" },
+    ),
   });
 }
