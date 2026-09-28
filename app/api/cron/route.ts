@@ -17,20 +17,76 @@ import { getLocalTimeParts } from "@/lib/timezone";
  */
 export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get("secret");
+  const debug = req.nextUrl.searchParams.get("debug") === "true";
+
   if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const supabase = getSupabaseServer();
 
-  const [{ data: schedules, error: schedErr }, { data: shops, error: shopErr }] = await Promise.all([
-    supabase.from("sync_schedules").select("id, shop_id, timezone, hour, minute, enabled, last_synced_date"),
+  const [
+    { data: schedules, error: schedErr },
+    { data: shops, error: shopErr },
+  ] = await Promise.all([
+    supabase
+      .from("sync_schedules")
+      .select("id, shop_id, timezone, hour, minute, enabled, last_synced_date"),
     supabase.from("shops").select("id, etsy_shop_id, shop_name"),
   ]);
-  if (schedErr) return NextResponse.json({ error: schedErr.message }, { status: 500 });
-  if (shopErr) return NextResponse.json({ error: shopErr.message }, { status: 500 });
+  if (schedErr)
+    return NextResponse.json({ error: schedErr.message }, { status: 500 });
+  if (shopErr)
+    return NextResponse.json({ error: shopErr.message }, { status: 500 });
 
   const shopById = new Map((shops ?? []).map((s) => [s.id, s]));
+
+  // Debug mode - show detailed info
+  if (debug) {
+    const scheduleDetails = (schedules ?? []).map((s) => {
+      const shop = shopById.get(s.shop_id);
+      const { hour, minute, dateStr } = getLocalTimeParts(s.timezone);
+      const currentMinutes = hour * 60 + minute;
+      const scheduleMinutes = s.hour * 60 + s.minute;
+      const isDue = currentMinutes >= scheduleMinutes;
+      const alreadySyncedToday = s.last_synced_date === dateStr;
+
+      return {
+        scheduleId: s.id,
+        shopName: shop?.shop_name ?? "Unknown",
+        etsyShopId: shop?.etsy_shop_id ?? null,
+        timezone: s.timezone,
+        scheduledTime: `${s.hour}:${String(s.minute).padStart(2, "0")}`,
+        currentLocalTime: `${hour}:${String(minute).padStart(2, "0")}`,
+        currentDate: dateStr,
+        lastSyncedDate: s.last_synced_date,
+        enabled: s.enabled,
+        isDue,
+        alreadySyncedToday,
+        willSync:
+          s.enabled && isDue && !alreadySyncedToday && shop !== undefined,
+      };
+    });
+
+    return NextResponse.json({
+      message: "Cron Debug Mode",
+      database: {
+        totalShops: shops?.length ?? 0,
+        totalSchedules: schedules?.length ?? 0,
+        shops: shops?.map((s) => ({
+          id: s.id,
+          shopName: s.shop_name,
+          etsyShopId: s.etsy_shop_id,
+        })),
+      },
+      schedules: scheduleDetails,
+      summary: {
+        enabledSchedules: scheduleDetails.filter((s) => s.enabled).length,
+        dueSchedules: scheduleDetails.filter((s) => s.isDue).length,
+        willSyncNow: scheduleDetails.filter((s) => s.willSync).length,
+      },
+    });
+  }
 
   const due = (schedules ?? []).filter((s) => {
     if (!s.enabled || !shopById.has(s.shop_id)) return false;
@@ -44,8 +100,14 @@ export async function GET(req: NextRequest) {
     const shop = shopById.get(s.shop_id)!;
     const { dateStr } = getLocalTimeParts(s.timezone);
     try {
-      const result = await syncShop(shop.id as string, shop.etsy_shop_id as number);
-      await supabase.from("sync_schedules").update({ last_synced_date: dateStr }).eq("id", s.id);
+      const result = await syncShop(
+        shop.id as string,
+        shop.etsy_shop_id as number,
+      );
+      await supabase
+        .from("sync_schedules")
+        .update({ last_synced_date: dateStr })
+        .eq("id", s.id);
       results.push({
         shop: shop.shop_name,
         scheduledFor: `${s.hour}:${String(s.minute).padStart(2, "0")} ${s.timezone}`,
@@ -56,5 +118,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ checked: schedules?.length ?? 0, synced: results.length, results });
+  return NextResponse.json({
+    checked: schedules?.length ?? 0,
+    synced: results.length,
+    results,
+  });
 }
