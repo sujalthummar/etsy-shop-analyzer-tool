@@ -95,9 +95,14 @@ export async function GET(req: NextRequest) {
     return hour * 60 + minute >= s.hour * 60 + s.minute;
   });
 
-  // Process all syncs in parallel instead of sequential for better performance
+  // Limit to 3 shops per cron run to avoid timeout on Vercel Free plan (10s limit)
+  // Remaining shops will sync on the next cron run (within 15 min)
+  const batchSize = 3;
+  const batch = due.slice(0, batchSize);
+
+  // Process batch in parallel for better performance
   const results = await Promise.allSettled(
-    due.map(async (s) => {
+    batch.map(async (s) => {
       const shop = shopById.get(s.shop_id)!;
       const { dateStr } = getLocalTimeParts(s.timezone);
       try {
@@ -122,8 +127,16 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     checked: schedules?.length ?? 0,
+    due: due.length,
     synced: results.filter((r) => r.status === "fulfilled").length,
     failed: results.filter((r) => r.status === "rejected").length,
+    remaining: Math.max(0, due.length - batchSize),
+    message:
+      due.length > batchSize
+        ? `Synced ${batch.length} shops. ${due.length - batchSize} more will sync on next cron run (within 15 min).`
+        : due.length > 0
+          ? "All due shops synced"
+          : "No shops due for sync",
     results: results.map((r) =>
       r.status === "fulfilled" ? r.value : { error: "Failed" },
     ),
