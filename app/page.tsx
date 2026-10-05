@@ -398,14 +398,6 @@ export default function Dashboard() {
     loadChanges(selectedShop);
   }, [selectedShop, loadChanges]);
 
-  // When user starts searching, automatically load all shops data if not already loaded
-  useEffect(() => {
-    if (searchQuery.trim() && selectedShop !== "all") {
-      // Load all shops data for search
-      loadChanges("all");
-    }
-  }, [searchQuery, selectedShop, loadChanges]);
-
   async function addShop(e: React.FormEvent) {
     e.preventDefault();
     if (!shopInput.trim()) return;
@@ -480,11 +472,13 @@ export default function Dashboard() {
       })
     : changes;
 
-  // When searching, always group by shop to show results from all shops
-  // When not searching, respect the selected shop filter
-  const shouldGroupByShop = searchQuery.trim() || selectedShop === "all";
+  // When searching:
+  // - If "All shops" is selected, search across all shops and show shop-wise results
+  // - If specific shop is selected, search only in that shop
+  // When not searching, respect the selected shop filter as usual
+  const shouldGroupByShop = selectedShop === "all";
 
-  // When viewing "All shops" or searching, split the flat change list into one group per
+  // When viewing "All shops", split the flat change list into one group per
   // shop so each shop gets its own labelled table instead of one mixed list.
   const groupedByShop: { shopId: string; shopName: string; rows: Change[] }[] =
     shouldGroupByShop
