@@ -2,7 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 
-type Shop = { id: string; etsy_shop_id: number; shop_name: string; created_at: string };
+type Shop = {
+  id: string;
+  etsy_shop_id: number;
+  shop_name: string;
+  created_at: string;
+};
 type Change = {
   id: string;
   shop_id: string;
@@ -42,7 +47,8 @@ function truncate(s: string, n = 90) {
 function getTimezoneOptions(): string[] {
   try {
     const supportedValuesOf = (Intl as any).supportedValuesOf;
-    if (typeof supportedValuesOf === "function") return supportedValuesOf("timeZone");
+    if (typeof supportedValuesOf === "function")
+      return supportedValuesOf("timeZone");
   } catch {
     // fall through to the small fallback list below
   }
@@ -83,7 +89,12 @@ function ChangesTable({ changes }: { changes: Change[] }) {
               </td>
               <td className="px-5 py-3">
                 {c.listing_url ? (
-                  <a href={c.listing_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+                  <a
+                    href={c.listing_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-accent hover:underline"
+                  >
                     {truncate(c.listing_title, 50)}
                   </a>
                 ) : (
@@ -95,7 +106,9 @@ function ChangesTable({ changes }: { changes: Change[] }) {
                   {FIELD_LABEL[c.field] ?? c.field}
                 </span>
               </td>
-              <td className="max-w-xs px-5 py-3 text-muted">{truncate(c.old_value)}</td>
+              <td className="max-w-xs px-5 py-3 text-muted">
+                {truncate(c.old_value)}
+              </td>
               <td className="max-w-xs px-5 py-3">{truncate(c.new_value)}</td>
             </tr>
           ))}
@@ -105,7 +118,12 @@ function ChangesTable({ changes }: { changes: Change[] }) {
   );
 }
 
-type ProductGroupData = { listingId: number; title: string; url: string | null; rows: Change[] };
+type ProductGroupData = {
+  listingId: number;
+  title: string;
+  url: string | null;
+  rows: Change[];
+};
 
 /** One group per listing_id. Each group's own rows are oldest-first, so the
  *  before→after chain reads top-to-bottom the way it actually happened.
@@ -118,15 +136,21 @@ function groupByProduct(rows: Change[]): ProductGroupData[] {
   }
   const groups = Array.from(map.entries()).map(([listingId, changeRows]) => {
     const sorted = [...changeRows].sort(
-      (a, b) => new Date(a.detected_at).getTime() - new Date(b.detected_at).getTime()
+      (a, b) =>
+        new Date(a.detected_at).getTime() - new Date(b.detected_at).getTime(),
     );
     const latest = sorted[sorted.length - 1];
-    return { listingId, title: latest.listing_title, url: latest.listing_url, rows: sorted };
+    return {
+      listingId,
+      title: latest.listing_title,
+      url: latest.listing_url,
+      rows: sorted,
+    };
   });
   groups.sort(
     (a, b) =>
       new Date(b.rows[b.rows.length - 1].detected_at).getTime() -
-      new Date(a.rows[a.rows.length - 1].detected_at).getTime()
+      new Date(a.rows[a.rows.length - 1].detected_at).getTime(),
   );
   return groups;
 }
@@ -157,7 +181,9 @@ function ProductGroup({ group }: { group: ProductGroupData }) {
             {group.rows.length} change{group.rows.length > 1 ? "s" : ""}
           </span>
         </span>
-        <span className="text-xs text-muted">{expanded ? "▾ hide" : "▸ show"}</span>
+        <span className="text-xs text-muted">
+          {expanded ? "▾ hide" : "▸ show"}
+        </span>
       </button>
       {expanded && (
         <div className="overflow-x-auto px-5 pb-3">
@@ -172,7 +198,10 @@ function ProductGroup({ group }: { group: ProductGroupData }) {
             </thead>
             <tbody>
               {group.rows.map((c) => (
-                <tr key={c.id} className="border-b border-line/40 align-top last:border-b-0">
+                <tr
+                  key={c.id}
+                  className="border-b border-line/40 align-top last:border-b-0"
+                >
                   <td className="whitespace-nowrap py-2 pr-4 text-muted">
                     {new Date(c.detected_at).toLocaleString()}
                   </td>
@@ -181,7 +210,9 @@ function ProductGroup({ group }: { group: ProductGroupData }) {
                       {FIELD_LABEL[c.field] ?? c.field}
                     </span>
                   </td>
-                  <td className="max-w-xs py-2 pr-4 text-muted">{truncate(c.old_value)}</td>
+                  <td className="max-w-xs py-2 pr-4 text-muted">
+                    {truncate(c.old_value)}
+                  </td>
                   <td className="max-w-xs py-2">{truncate(c.new_value)}</td>
                 </tr>
               ))}
@@ -193,7 +224,13 @@ function ProductGroup({ group }: { group: ProductGroupData }) {
   );
 }
 
-function ChangesView({ changes, viewMode }: { changes: Change[]; viewMode: "time" | "product" }) {
+function ChangesView({
+  changes,
+  viewMode,
+}: {
+  changes: Change[];
+  viewMode: "time" | "product";
+}) {
   if (viewMode === "time") return <ChangesTable changes={changes} />;
   const groups = groupByProduct(changes);
   return (
@@ -211,7 +248,7 @@ function ScheduleManager({ shopId }: { shopId: string }) {
   const [schedules, setSchedules] = useState<Schedule[] | null>(null);
   const [newTime, setNewTime] = useState("09:00");
   const [newTz, setNewTz] = useState(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   );
   const [busy, setBusy] = useState(false);
 
@@ -231,7 +268,12 @@ function ScheduleManager({ shopId }: { shopId: string }) {
     await fetch("/api/schedules", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ shop_id: shopId, hour: h, minute: m, timezone: newTz }),
+      body: JSON.stringify({
+        shop_id: shopId,
+        hour: h,
+        minute: m,
+        timezone: newTz,
+      }),
     });
     setBusy(false);
     load();
@@ -256,20 +298,30 @@ function ScheduleManager({ shopId }: { shopId: string }) {
       {schedules === null ? (
         <p className="text-xs text-muted">Loading…</p>
       ) : schedules.length === 0 ? (
-        <p className="text-xs text-muted">No auto-sync times yet — add one below.</p>
+        <p className="text-xs text-muted">
+          No auto-sync times yet — add one below.
+        </p>
       ) : (
         <div className="space-y-1.5">
           {schedules.map((s) => (
             <div key={s.id} className="flex items-center gap-2 text-xs">
-              <input type="checkbox" checked={s.enabled} onChange={(e) => toggleSchedule(s.id, e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={s.enabled}
+                onChange={(e) => toggleSchedule(s.id, e.target.checked)}
+              />
               <span className="font-medium text-ink">
-                {String(s.hour).padStart(2, "0")}:{String(s.minute).padStart(2, "0")}
+                {String(s.hour).padStart(2, "0")}:
+                {String(s.minute).padStart(2, "0")}
               </span>
               <span className="text-muted">{s.timezone}</span>
               <span className="text-muted">
                 · last ran: {s.last_synced_date ?? "never yet"}
               </span>
-              <button onClick={() => removeSchedule(s.id)} className="ml-auto text-muted hover:text-ink">
+              <button
+                onClick={() => removeSchedule(s.id)}
+                className="ml-auto text-muted hover:text-ink"
+              >
                 ✕ remove
               </button>
             </div>
@@ -317,7 +369,10 @@ export default function Dashboard() {
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [loadingChanges, setLoadingChanges] = useState(false);
   const [viewMode, setViewMode] = useState<"product" | "time">("product");
-  const [expandedScheduleFor, setExpandedScheduleFor] = useState<string | null>(null);
+  const [expandedScheduleFor, setExpandedScheduleFor] = useState<string | null>(
+    null,
+  );
+  const [searchQuery, setSearchQuery] = useState("");
 
   const loadShops = useCallback(async () => {
     const res = await fetch("/api/shops");
@@ -327,7 +382,8 @@ export default function Dashboard() {
 
   const loadChanges = useCallback(async (shopId: string) => {
     setLoadingChanges(true);
-    const url = shopId === "all" ? "/api/changes" : `/api/changes?shop_id=${shopId}`;
+    const url =
+      shopId === "all" ? "/api/changes" : `/api/changes?shop_id=${shopId}`;
     const res = await fetch(url);
     const data = await res.json();
     if (res.ok) setChanges(data.changes ?? []);
@@ -359,7 +415,9 @@ export default function Dashboard() {
       return;
     }
     setShopInput("");
-    setStatusMsg(`Added "${data.shop.shop_name}". Click "Sync now" to pull its listings for the first time.`);
+    setStatusMsg(
+      `Added "${data.shop.shop_name}". Click "Sync now" to pull its listings for the first time.`,
+    );
     loadShops();
   }
 
@@ -378,42 +436,75 @@ export default function Dashboard() {
       return;
     }
     setStatusMsg(
-      `${shop.shop_name}: checked ${data.totalListings} listings — ${data.changesDetected} change(s) (${data.newListings} new, ${data.removedListings} removed/inactive).`
+      `${shop.shop_name}: checked ${data.totalListings} listings — ${data.changesDetected} change(s) (${data.newListings} new, ${data.removedListings} removed/inactive).`,
     );
     loadChanges(selectedShop);
   }
 
   function exportCsv(shopId: string) {
-    const url = shopId === "all" ? "/api/export" : `/api/export?shop_id=${shopId}`;
+    const url =
+      shopId === "all" ? "/api/export" : `/api/export?shop_id=${shopId}`;
     window.location.href = url;
   }
 
   const shopNameById = new Map(shops.map((s) => [s.id, s.shop_name]));
+
+  // Filter changes based on search query
+  const filteredChanges = searchQuery.trim()
+    ? changes.filter((change) => {
+        const query = searchQuery.toLowerCase();
+        const keywords = query.split(/\s+/).filter(Boolean);
+
+        // Fields to search in
+        const searchableText = [
+          change.listing_title,
+          change.field,
+          change.old_value,
+          change.new_value,
+          FIELD_LABEL[change.field] || change.field,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        // Match if ALL keywords are found in searchable text
+        return keywords.every((keyword) => searchableText.includes(keyword));
+      })
+    : changes;
 
   // When viewing "All shops", split the flat change list into one group per
   // shop so each shop gets its own labelled table instead of one mixed list.
   const groupedByShop: { shopId: string; shopName: string; rows: Change[] }[] =
     selectedShop === "all"
       ? Array.from(
-          changes.reduce((acc, c) => {
+          filteredChanges.reduce((acc, c) => {
             if (!acc.has(c.shop_id)) acc.set(c.shop_id, []);
             acc.get(c.shop_id)!.push(c);
             return acc;
-          }, new Map<string, Change[]>())
+          }, new Map<string, Change[]>()),
         ).map(([shopId, rows]) => ({
           shopId,
           shopName: shopNameById.get(shopId) ?? "Unknown shop",
           rows,
         }))
-      : [{ shopId: selectedShop, shopName: shopNameById.get(selectedShop) ?? "", rows: changes }];
+      : [
+          {
+            shopId: selectedShop,
+            shopName: shopNameById.get(selectedShop) ?? "",
+            rows: filteredChanges,
+          },
+        ];
 
   return (
     <main className="min-h-screen px-6 py-10 md:px-12 lg:px-20">
       <div className="mx-auto max-w-5xl">
         <header className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">Etsy Listing Monitor</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">
+            Etsy Listing Monitor
+          </h1>
           <p className="mt-1 text-sm text-muted">
-            Track any Etsy shop and see exactly what changed — title, description, price, tags — listing by listing.
+            Track any Etsy shop and see exactly what changed — title,
+            description, price, tags — listing by listing.
           </p>
         </header>
 
@@ -441,7 +532,9 @@ export default function Dashboard() {
             <button
               onClick={() => setSelectedShop("all")}
               className={`rounded-full border px-4 py-1.5 text-sm ${
-                selectedShop === "all" ? "border-ink bg-ink text-white" : "border-line bg-white text-ink"
+                selectedShop === "all"
+                  ? "border-ink bg-ink text-white"
+                  : "border-line bg-white text-ink"
               }`}
             >
               All shops
@@ -468,7 +561,9 @@ export default function Dashboard() {
                       {syncingId === shop.id ? "Syncing…" : "⟳ Sync now"}
                     </button>
                     <button
-                      onClick={() => setExpandedScheduleFor(isExpanded ? null : shop.id)}
+                      onClick={() =>
+                        setExpandedScheduleFor(isExpanded ? null : shop.id)
+                      }
                       className="ml-auto text-xs font-medium text-muted hover:text-ink"
                     >
                       {isExpanded ? "▾ Hide auto-sync" : "▸ Auto-sync"}
@@ -482,49 +577,93 @@ export default function Dashboard() {
         )}
 
         <section className="rounded-xl border border-line bg-white">
-          <div className="flex items-center justify-between border-b border-line px-5 py-4">
-            <h2 className="text-sm font-semibold text-ink">Detected changes</h2>
-            <div className="flex items-center gap-3">
-              <div className="flex rounded-lg border border-line p-0.5 text-xs">
+          <div className="flex flex-col gap-4 border-b border-line px-5 py-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-ink">
+                Detected changes
+              </h2>
+              <div className="flex items-center gap-3">
+                <div className="flex rounded-lg border border-line p-0.5 text-xs">
+                  <button
+                    onClick={() => setViewMode("product")}
+                    className={`rounded-md px-2.5 py-1 ${
+                      viewMode === "product"
+                        ? "bg-ink text-white"
+                        : "text-muted"
+                    }`}
+                  >
+                    By product
+                  </button>
+                  <button
+                    onClick={() => setViewMode("time")}
+                    className={`rounded-md px-2.5 py-1 ${viewMode === "time" ? "bg-ink text-white" : "text-muted"}`}
+                  >
+                    By time
+                  </button>
+                </div>
                 <button
-                  onClick={() => setViewMode("product")}
-                  className={`rounded-md px-2.5 py-1 ${
-                    viewMode === "product" ? "bg-ink text-white" : "text-muted"
-                  }`}
+                  onClick={() => exportCsv(selectedShop)}
+                  disabled={changes.length === 0}
+                  className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink disabled:opacity-40"
                 >
-                  By product
-                </button>
-                <button
-                  onClick={() => setViewMode("time")}
-                  className={`rounded-md px-2.5 py-1 ${viewMode === "time" ? "bg-ink text-white" : "text-muted"}`}
-                >
-                  By time
+                  Export CSV {selectedShop === "all" ? "(all shops)" : ""}
                 </button>
               </div>
-              <button
-                onClick={() => exportCsv(selectedShop)}
-                disabled={changes.length === 0}
-                className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink disabled:opacity-40"
-              >
-                Export CSV {selectedShop === "all" ? "(all shops)" : ""}
-              </button>
+            </div>
+
+            {/* Search Bar */}
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search changes by product name, field, or values..."
+                className="w-full rounded-lg border border-line bg-paper px-4 py-2 pr-10 text-sm outline-none focus:border-accent"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink"
+                  aria-label="Clear search"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </div>
 
           {loadingChanges ? (
             <p className="px-5 py-8 text-sm text-muted">Loading…</p>
+          ) : filteredChanges.length === 0 && searchQuery ? (
+            <div className="px-5 py-8 text-center">
+              <p className="text-sm text-muted">
+                No changes found for "{searchQuery}"
+              </p>
+              <button
+                onClick={() => setSearchQuery("")}
+                className="mt-2 text-xs text-accent hover:underline"
+              >
+                Clear search
+              </button>
+            </div>
           ) : changes.length === 0 ? (
             <p className="px-5 py-8 text-sm text-muted">
-              No changes recorded yet. Add a shop above and click "Sync now" — the first sync sets the baseline,
-              and changes will show up starting from the second sync.
+              No changes recorded yet. Add a shop above and click "Sync now" —
+              the first sync sets the baseline, and changes will show up
+              starting from the second sync.
             </p>
           ) : selectedShop !== "all" ? (
-            <ChangesView changes={changes} viewMode={viewMode} />
+            <ChangesView changes={filteredChanges} viewMode={viewMode} />
           ) : (
             groupedByShop.map((group, i) => (
-              <div key={group.shopId} className={i > 0 ? "border-t border-line" : ""}>
+              <div
+                key={group.shopId}
+                className={i > 0 ? "border-t border-line" : ""}
+              >
                 <div className="flex items-center justify-between bg-paper/60 px-5 py-2.5">
-                  <h3 className="text-sm font-semibold text-ink">{group.shopName}</h3>
+                  <h3 className="text-sm font-semibold text-ink">
+                    {group.shopName}
+                  </h3>
                   <button
                     onClick={() => exportCsv(group.shopId)}
                     className="text-xs font-medium text-muted hover:text-ink"
