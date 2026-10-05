@@ -398,6 +398,14 @@ export default function Dashboard() {
     loadChanges(selectedShop);
   }, [selectedShop, loadChanges]);
 
+  // When user starts searching, automatically load all shops data if not already loaded
+  useEffect(() => {
+    if (searchQuery.trim() && selectedShop !== "all") {
+      // Load all shops data for search
+      loadChanges("all");
+    }
+  }, [searchQuery, selectedShop, loadChanges]);
+
   async function addShop(e: React.FormEvent) {
     e.preventDefault();
     if (!shopInput.trim()) return;
@@ -472,10 +480,14 @@ export default function Dashboard() {
       })
     : changes;
 
-  // When viewing "All shops", split the flat change list into one group per
+  // When searching, always group by shop to show results from all shops
+  // When not searching, respect the selected shop filter
+  const shouldGroupByShop = searchQuery.trim() || selectedShop === "all";
+
+  // When viewing "All shops" or searching, split the flat change list into one group per
   // shop so each shop gets its own labelled table instead of one mixed list.
   const groupedByShop: { shopId: string; shopName: string; rows: Change[] }[] =
-    selectedShop === "all"
+    shouldGroupByShop
       ? Array.from(
           filteredChanges.reduce((acc, c) => {
             if (!acc.has(c.shop_id)) acc.set(c.shop_id, []);
@@ -652,9 +664,7 @@ export default function Dashboard() {
               the first sync sets the baseline, and changes will show up
               starting from the second sync.
             </p>
-          ) : selectedShop !== "all" ? (
-            <ChangesView changes={filteredChanges} viewMode={viewMode} />
-          ) : (
+          ) : shouldGroupByShop ? (
             groupedByShop.map((group, i) => (
               <div
                 key={group.shopId}
@@ -663,6 +673,12 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between bg-paper/60 px-5 py-2.5">
                   <h3 className="text-sm font-semibold text-ink">
                     {group.shopName}
+                    {group.rows.length > 0 && (
+                      <span className="ml-2 text-xs text-muted">
+                        ({group.rows.length} change
+                        {group.rows.length > 1 ? "s" : ""})
+                      </span>
+                    )}
                   </h3>
                   <button
                     onClick={() => exportCsv(group.shopId)}
@@ -674,6 +690,8 @@ export default function Dashboard() {
                 <ChangesView changes={group.rows} viewMode={viewMode} />
               </div>
             ))
+          ) : (
+            <ChangesView changes={filteredChanges} viewMode={viewMode} />
           )}
         </section>
       </div>
